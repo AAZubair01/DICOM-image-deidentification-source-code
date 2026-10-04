@@ -1,0 +1,70 @@
+# ============================================================================
+# dicom-cxr-deidentify - configuration
+# ----------------------------------------------------------------------------
+# HOW TO USE:
+#   1. Copy this file to  config.yaml
+#   2. Replace every placeholder path below with YOUR paths
+#   3. Run:  python src/deidentify_dataset.py --config config.yaml --audit
+#      first, review the audit, then run without --audit.
+#
+# NEVER commit config.yaml or any output folder to git - see .gitignore.
+# ============================================================================
+
+project:
+  # Metadata workbook: one row per patient. Columns are auto-detected by
+  # fuzzy header matching, e.g.:
+  #   NAME column      -> "Name", "Patient Name" ...
+  #   CODE column      -> "Code", "Hospital Number", "MRN" ... (numeric codes
+  #                       are the PRIMARY match key for DICOMs)
+  #   DATE column      -> "Exam Date", "Examination Date" ... (optional)
+  #   CONCLUSION column-> "Report Conclusion", "Diagnosis", "Findings" ...
+  #                       (optional; copied into the colleague metadata)
+  # Every sheet is read (e.g. one sheet for cases, one for controls).
+  metadata_file: "/path/to/project/metadata.xlsx"
+
+matching:
+  min_name_score: 0.85    # fuzzy-name matches below this -> manual review queue
+  ambiguous_gap: 0.05     # top-2 fuzzy scores closer than this -> review queue
+  random_seed: 42         # fixed seed => reproducible pseudo-IDs and shifts
+
+dates:
+  # PS3.15 treats dates as quasi-identifiers. Keeping real exam dates is
+  # basic-profile compliant; shifting removes the calendar link. A shift is
+  # CONSISTENT PER PATIENT, so intervals between studies are preserved.
+  shift: false            # true = shift dates by a random per-patient offset
+  shift_min_days: 60
+  shift_max_days: 700     # keep small enough to stay in a plausible window
+
+identity:
+  # Keep the hospital name in the headers?
+  # true  = InstitutionName is retained (provenance/scanner context for
+  #         the receiving researcher; PS3.15 optional field).
+  # false = InstitutionName is also removed.
+  # InstitutionAddress, InstitutionalDepartmentName and StationName are
+  # ALWAYS removed (they locate the machine/room far more precisely).
+  retain_institution_name: true
+
+files:
+  # Non-image artefacts of CD/PACS exports to skip quietly (uppercase,
+  # matched against the file NAME, not the path). Extend as needed.
+  skip_filenames: ["DICOMDIR", "LABEL.TXT"]
+
+sources:
+  # One entry per input folder. Every image found under a folder receives
+  # that folder's label; prefix builds the pseudo-ID (PNEU_0001 ...).
+  # Add or remove entries freely (e.g. one folder per phase of the study).
+  - folder: "/path/to/project/Pneumonia paediatrics CXR"
+    label: "pneumonia"
+    prefix: "PNEU"
+  - folder: "/path/to/project/Normal Paediatrics CXR"
+    label: "control"
+    prefix: "CTRL"
+
+output:
+  # Everything shareable lands here:
+  base_dir: "/path/to/project/deidentified_output"
+  clean_subdir: "clean_chest"          # verified, shareable chest images
+  qa_subdir: "qa_manual_review"        # YOU review these before sharing
+  # The real-identity <-> pseudo-ID mapping goes here.
+  # >>> NEVER share this folder. Keep it local, ideally encrypted. <<<
+  mapping_dir: "/path/to/project/mapping_keep_local_DO_NOT_SHARE"
